@@ -4,9 +4,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import matplotlib
-from tqdm import tqdm  # 引入tqdm来显示进度条
+from tqdm import tqdm
 
-# 设置中文字体
+
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
@@ -14,9 +14,6 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 # --- 第一步：数据加载与特征工程 (已修正时间格式处理) ---
 
 def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_seconds=60, step_seconds=10):
-    """
-    加载数据，使用固定大小的滑动窗口提取特征。
-    """
     print("开始加载数据...")
     try:
         df = pd.read_csv(filepath, low_memory=False)
@@ -25,22 +22,16 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
 
     print("数据加载完毕，开始进行特征工程...")
 
-    # 将毫秒级Unix时间戳转换为标准日期时间格式
     print("正在转换时间戳格式...")
     df['receiveTime'] = pd.to_datetime(df['receiveTime'], unit='ms')
     #df['receiveTime'] = pd.to_datetime(df['receiveTime'], unit='ms', utc=True).dt.tz_convert('Asia/Shanghai')
-    # -------------------------
-
     df = df.sort_values('receiveTime').reset_index(drop=True)
-
-    # 1. 先按时间差分出大的、连续的驾驶行程 (Trip)
     time_diff = df['receiveTime'].diff().dt.total_seconds() / 60
     df['trip_id'] = (time_diff > trip_split_minutes).cumsum()
 
 
     window_features = []
 
-    # 2. 遍历每一个大行程
     for trip_id, trip_data in df.groupby('trip_id'):
 
         if trip_data['vehicleSpeed'].max() == 0:
@@ -51,20 +42,16 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
         end_time = trip_data['receiveTime'].max()
 
         print(f"\n正在处理行程 {trip_id} (时长: {end_time - start_time})...")
-
-        # 3. 在行程内部进行滑动窗口操作
         current_time = start_time
-        # 使用tqdm包装循环，以显示进度条
         pbar = tqdm(total=(end_time - start_time).total_seconds())
         while current_time + pd.Timedelta(seconds=window_seconds) <= end_time:
             window_start = current_time
             window_end = current_time + pd.Timedelta(seconds=window_seconds)
 
             window_df = trip_data[(trip_data['receiveTime'] >= window_start) & (trip_data['receiveTime'] < window_end)]
-
             if len(window_df) > 5:
                 mileage_covered = window_df['totalMileage'].iloc[-1] - window_df['totalMileage'].iloc[0]
-                if mileage_covered < 0: mileage_covered = 0  # 处理里程跳变异常
+                if mileage_covered < 0: mileage_covered = 0 
 
                 window_features.append({
                     'avg_speed': window_df['vehicleSpeed'].mean(),#平均速度
@@ -121,15 +108,12 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
     print(f"\n特征工程完成，共从所有行程中提取出 {len(features_df)} 个有效的时间窗口。")
     try:
         print(f"正在将特征文件保存到:")
-        # 使用 encoding='utf-8-sig' 确保在Excel中打开中文不会乱码
         features_df.to_csv('./result.csv', index=False, encoding='utf-8-sig')
         print("文件保存成功！")
     except Exception as e:
         print(f"文件保存失败: {e}")
     return features_df
 
-
-# --- 第二步：模型训练 (聚类) ---
 def train_clustering_model(features_df):
     if features_df is None or features_df.empty:
         print("特征数据为空，无法进行聚类。")
@@ -156,7 +140,6 @@ def train_clustering_model(features_df):
     plt.savefig('elbow_plot.png', dpi=300)
     print("肘部法则图已保存为 elbow_plot.png")
     plt.show()
-
 
     optimal_k = int(input("根据肘部法则图，请输入您认为的最佳K值: "))
 
@@ -194,7 +177,6 @@ def analyze_and_visualize(result_df, feature_cols, scaler,kmeans):
     ax = fig.add_subplot(111, polar=True)
 
     for i, stats in enumerate(cluster_centers_scaled):
-        # 确保 value_counts 的索引存在，避免在某些类别数量为0时报错
         count = result_df['cluster'].value_counts().get(i, 0)
         stats = np.concatenate((stats, [stats[0]]))
         ax.plot(angles, stats, label=f"类别 {i} (数量: {count})")
@@ -214,13 +196,11 @@ def analyze_and_visualize(result_df, feature_cols, scaler,kmeans):
     print(f"雷达图已保存为 radar_chart_{k}.png")
 
 
-# --- 主程序 ---
 if __name__ == '__main__':
     filepath = 'data/cleaned_VHR_data3.0.csv'
     pd.set_option('display.max_rows', 100)
     pd.set_option('display.max_columns', 50)
     pd.set_option('display.width', 200)
-    # --- 可调参数 ---
     WINDOW_SECONDS = 60
     STEP_SECONDS = 10
 
@@ -238,4 +218,5 @@ if __name__ == '__main__':
         if result_df is not None:
             analyze_and_visualize(result_df, feature_cols, scaler,kmeans)
     else:
+
         print("没有有效的驾驶数据窗口可供分析。")
