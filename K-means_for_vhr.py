@@ -6,12 +6,10 @@ import matplotlib.pyplot as plt
 import matplotlib
 from tqdm import tqdm
 
-
+## 此文件仅用于聚类，帮助找到最佳聚类个数，并得到聚类特征
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-
-# --- 第一步：数据加载与特征工程 (已修正时间格式处理) ---
 
 def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_seconds=60, step_seconds=10):
     print("开始加载数据...")
@@ -149,8 +147,6 @@ def train_clustering_model(features_df):
     return features_df, feature_cols, scaler,kmeans
 
 
-# --- 第三步：结果分析与可视化 ---
-
 def analyze_and_visualize(result_df, feature_cols, scaler,kmeans):
     if result_df is None:
         return
@@ -220,3 +216,4 @@ if __name__ == '__main__':
     else:
 
         print("没有有效的驾驶数据窗口可供分析。")
+
