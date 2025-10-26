@@ -4,24 +4,17 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import matplotlib
-from tqdm import tqdm  # 引入tqdm来显示进度条
-import os  # 引入 os 来检查文件
+from tqdm import tqdm 
+import os  
 
-# 设置中文字体
+##此文件用来训练聚类，并固定聚类数量，输出聚类结果后程序暂停，将聚类结果利用GPT标注Status_code后返回程序运行，程序根据标签将同类中的样本数据统一打标签
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 
-# --- 第一步：数据加载与特征工程 (已修正) ---
 
 def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_seconds=60, step_seconds=10):
-    """
-    加载数据，使用固定大小的滑动窗口提取特征。
-    (已修正)
-    1. 保留原始 receiveTime (int) 用于保持格式。
-    2. 创建 receiveTime_dt (datetime) 用于计算。
-    3. 保存 'start_time_int'，即每个窗口第一条数据的原始 receiveTime 整数。
-    """
+
     print("开始加载数据...")
     try:
         df = pd.read_csv(filepath, low_memory=False)
@@ -35,38 +28,26 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
         df['collectTime'] = df['collectTime'].astype(np.int64)
     except ValueError as e:
         print(f"错误：receiveTime 列转换失败: {e}。请检查数据中是否有非数字值。")
-        return pd.DataFrame() # 返回空DataFrame
+        return pd.DataFrame()
 
-    # 2. (解决精度问题) 创建一个新的 'datetime' 列用于所有的时间计算
+
     print("正在转换时间戳格式 (创建辅助列)...")
     df['collectTime_dt'] = pd.to_datetime(df['collectTime'], unit='ms')
-    # ----------------
 
-    # 按新的 'datetime' 列排序
     df = df.sort_values('collectTime_dt').reset_index(drop=True)
-
-    # 1. 先按时间差分出大的、连续的驾驶行程 (Trip)
-    #    (使用 'datetime' 列进行计算)
     time_diff = df['collectTime_dt'].diff().dt.total_seconds() / 60
     df['trip_id'] = (time_diff > trip_split_minutes).cumsum()
-
-
     window_features = []
 
-    # 2. 遍历每一个大行程
     for trip_id, trip_data in df.groupby('trip_id'):
 
         if trip_data['vehicleSpeed'].max() == 0:
             continue
 
         trip_data = trip_data.reset_index(drop=True)
-        # (使用 'datetime' 列进行计算)
         start_time = trip_data['collectTime_dt'].min()
         end_time = trip_data['collectTime_dt'].max()
-
         print(f"\n正在处理行程 {trip_id} (时长: {end_time - start_time})...")
-
-        # 3. 在行程内部进行滑动窗口操作
         current_time = start_time
         pbar_total_seconds = (end_time - start_time).total_seconds()
         pbar = tqdm(total=max(pbar_total_seconds, step_seconds))
@@ -74,20 +55,14 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
         while current_time + pd.Timedelta(seconds=window_seconds) <= end_time:
             window_start = current_time
             window_end = current_time + pd.Timedelta(seconds=window_seconds)
-
-            # (使用 'datetime' 列进行筛选)
             window_df = trip_data[(trip_data['collectTime_dt'] >= window_start) &
                                   (trip_data['collectTime_dt'] < window_end)]
 
             if len(window_df) > 5:
                 mileage_covered = window_df['totalMileage'].iloc[-1] - window_df['totalMileage'].iloc[0]
                 if mileage_covered < 0: mileage_covered = 0
-
-                # --- (关键修改：解决标记频率问题) ---
-                # 我们不再保存 'window_start' (理论时间)
-                # 而是保存此窗口中【第一条数据】的【原始13位整数时间戳】
                 actual_start_time_int = window_df['collectTime'].iloc[0]
-                # ---------------------------------
+
 
                 window_features.append({
                     'start_time_int': actual_start_time_int,
@@ -141,7 +116,6 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
             pbar.update(min(step_seconds, pbar.total - pbar.n))
         pbar.close()
 
-    # (features_df 现在包含 'start_time_int' 列)
     features_df = pd.DataFrame(window_features).dropna()
     print(f"\n特征工程完成，共从所有行程中提取出 {len(features_df)} 个有效的时间窗口。")
     try:
@@ -152,17 +126,12 @@ def feature_engineering_sliding_window(filepath, trip_split_minutes=10, window_s
         print(f"文件保存失败: {e}")
     return features_df
 
-
-# --- 第二步：模型训练 (聚类) (已修改) ---
 def train_clustering_model(features_df):
     if features_df is None or features_df.empty:
         print("特征数据为空，无法进行聚类。")
         return None, None, None
     print("\n开始训练聚类模型...")
-
-    # --- (修改) 确保 'start_time_int' 不会被用于聚类 ---
     feature_cols = [col for col in features_df.columns if col not in ['start_time_int']]
-
     X = features_df[feature_cols].values
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -193,9 +162,6 @@ def train_clustering_model(features_df):
     # (features_df 现在包含 'start_time_int' 和 'cluster' 列)
     return features_df, feature_cols, scaler, kmeans
 
-
-# --- 第三步：结果分析与可视化 (已修改) ---
-
 def analyze_and_visualize(result_df, feature_cols, scaler, kmeans):
     if result_df is None:
         return None
@@ -218,7 +184,7 @@ def analyze_and_visualize(result_df, feature_cols, scaler, kmeans):
     print(f"\n聚类中心特征均值已保存为 {centers_file}")
 
     print("\n--- 交互式状态标注 ---")
-    print(f"1. 脚本已暂停。请在程序目录中找到并打开: {centers_file} (建议使用Excel)")
+    print(f"1. 脚本已暂停。请在程序目录中找到并打开: {centers_file}")
     print(f"2. 在该文件的最后一列，*新添加*一列，列名为 'Status_Code'")
     print(f"3. 为每一行(代表一个聚类)填写您定义的标签。")
     print(f"4. !! 重要：请确保列名完全正确 ('Status_Code')，然后保存并关闭该CSV文件。 !!")
@@ -241,10 +207,7 @@ def analyze_and_visualize(result_df, feature_cols, scaler, kmeans):
 
         status_map = labeled_centers_df['Status_Code'].to_dict()
         print(f"成功读取到以下状态映射: {status_map}")
-
-        # (result_df 现在包含 'start_time_int', 'cluster', 和 'Status_Code' 列)
         result_df['Status_Code'] = result_df['cluster'].map(status_map)
-
         output_file = f'all_samples_with_status_labels_k{k}.csv'
         result_df.to_csv(output_file, index=False, encoding='utf-8-sig')
 
@@ -286,70 +249,45 @@ def analyze_and_visualize(result_df, feature_cols, scaler, kmeans):
     plt.close()
 
     print("聚类分析和标注完成。")
-    # (返回的 result_df 包含 'start_time_int' 和 'Status_Code')
     return result_df
 
 
-# --- (已修改) 第四步：将标签映射回原始文件 ---
 
 def map_labels_to_original_file(original_filepath, labeled_windows_df):
-    """
-    (已修正)
-    将标注好的窗口标签 (Status_Code) 映射回原始的VHR数据文件。
-    使用 'start_time_int' (13位整数) 作为 'Key' 与 'receiveTime' (13位整数) 进行合并。
-    """
     print("\n--- 正在将工况标签映射回原始VHR文件 ---")
-
-    # --- (修改) 检查新的Key ---
     if 'start_time_int' not in labeled_windows_df.columns or 'Status_Code' not in labeled_windows_df.columns:
         print("错误：标注的窗口数据中缺少 'start_time_int' 或 'Status_Code' 列。")
         return
 
-    # 1. 创建一个只包含“钥匙”(13位整数)和“标签”的查找表
     labeled_windows_df['start_time_int'] = labeled_windows_df['start_time_int'].astype(np.int64)
     lookup_df = labeled_windows_df[['start_time_int', 'Status_Code']].drop_duplicates()
-
     print(f"已加载 {len(lookup_df)} 个唯一的窗口标签。")
-
-    # 2. 加载原始VHR文件
     print(f"正在加载原始文件: {original_filepath} ...")
     try:
         original_df = pd.read_csv(original_filepath, low_memory=False)
     except UnicodeDecodeError:
         original_df = pd.read_csv(original_filepath, low_memory=False, encoding='gbk')
-
-    # --- (修改：解决精度问题) ---
-    # 3. 关键：将原始文件的 'receiveTime' 也强制转换为 int64
-    #    以确保与 'start_time_int' 的格式完全一致
     try:
         original_df['collectTime'] = original_df['collectTime'].astype(np.int64)
     except ValueError as e:
         print(f"错误：原始文件 {original_filepath} 的 collectTime 列转换失败: {e}。")
         return
-
-    # 4. 使用左连接 (Left Merge) 将标签合并到原始数据
-    #    (在两个13位整型Key上合并)
     print("正在合并标签到原始数据...")
     merged_df = pd.merge(
         original_df,
         lookup_df,
-        left_on='collectTime',    # 原始数据 (int64)
-        right_on='start_time_int',# 窗口的起始时间 (int64)
+        left_on='collectTime',   
+        right_on='start_time_int',
         how='left'
     )
 
-    # 5. 清理并保存
-    # (合并会产生一个多余的 'start_time_int' 列，将其删除)
     if 'start_time_int' in merged_df.columns:
         merged_df = merged_df.drop(columns=['start_time_int'])
 
-    # (构造输出文件名)
     base_name = os.path.basename(original_filepath)
     dir_name = os.path.dirname(original_filepath)
     output_filename = os.path.join(dir_name, base_name.replace('.csv', '_with_labels.csv'))
-
     print(f"合并完成。正在保存到: {output_filename}")
-    # (保存时, receiveTime 列将保持其原始的13位整数格式)
     merged_df.to_csv(output_filename, index=False, encoding='utf-8-sig')
 
     marked_rows = merged_df['Status_Code'].notna().sum()
@@ -358,8 +296,6 @@ def map_labels_to_original_file(original_filepath, labeled_windows_df):
     print(f"(这 {marked_rows} 行, 对应 {len(lookup_df)} 个有效窗口的起始点)")
     print(f"文件已保存为: {output_filename}")
 
-
-# --- 主程序 (已修改) ---
 if __name__ == '__main__':
     filepath = 'data/cleaned_VHR_data4.0.csv'
 
@@ -387,10 +323,10 @@ if __name__ == '__main__':
                 labeled_result_df = analyze_and_visualize(result_df, feature_cols, scaler,kmeans)
 
                 if labeled_result_df is not None:
-                    # (调用修正后的新函数)
                     map_labels_to_original_file(filepath, labeled_result_df)
                 else:
                     print("未完成状态标注，已跳过合并到原始文件。")
 
         else:
+
             print("没有有效的驾驶数据窗口可供分析。")
