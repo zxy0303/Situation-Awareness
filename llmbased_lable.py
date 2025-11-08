@@ -12,7 +12,7 @@ PASS_THROUGH_FEATURES = [
 ]
 
 
-# --- 2. 【已修改】从 JSON 加载并构建“关键特征列表” (包含所有4个统计) ---
+# --- 2. 从 JSON 加载并构建“关键特征列表” (包含所有4个统计) ---
 def load_features_from_json(json_path):
     """
     读取 structured.json 文件，
@@ -75,11 +75,10 @@ def load_clustered_data(csv_path):
         return None
 
 
-# --- 4. 整合、筛选并保存 (已修复 .mean() 错误) ---
+# --- 4. 整合、筛选并保存 ---
 def summarize_and_save(df, key_features_list, output_path):
     print("正在按 'category_id' 整合数据 (计算均值)...")
 
-    # 【修复】添加 numeric_only=True 来跳过 'window_start_time'
     cluster_centers_all_features = df.groupby('category_id').mean(numeric_only=True)
 
     print(f"正在从 {len(cluster_centers_all_features.columns)} 个总特征中筛选 {len(key_features_list)} 个关键特征...")
@@ -108,7 +107,6 @@ def summarize_and_save(df, key_features_list, output_path):
         print(f"已将 {len(llm_input_df)} 个类别的“完整画像”保存到: {output_path}")
 
         print("\n--- 每个类别的“完整画像”（用于 LLM 分析） ---")
-        # 【修改】将 max_rows 设置得更高，以打印所有特征
         pd.set_option('display.max_rows', 500)
         print(llm_input_df_transposed.round(2))
 
@@ -125,4 +123,5 @@ if __name__ == "__main__":
         clustered_df = load_clustered_data(CLUSTERED_DATA_FILE)
 
         if clustered_df is not None:
+
             summarize_and_save(clustered_df, key_features_for_llm, OUTPUT_FILE)
