@@ -45,30 +45,19 @@ if not numerical_cols_for_detection:
 else:
     print(f"开始在 {len(numerical_cols_for_detection)} 个数值列上使用 Q10/Q90 (3.0 乘数) 规则检测异常值...")
 
-    # 1. 计算 Q10, Q90 和 IDR
+
     Q10 = df[numerical_cols_for_detection].quantile(0.10)
     Q90 = df[numerical_cols_for_detection].quantile(0.90)
-    IDR = Q90 - Q10  # Inter-Decile Range
+    IDR = Q90 - Q10 
 
-    # 2. 定义边界 (使用 3.0 乘数)
     multiplier = 3.0
     lower_bound = Q10 - multiplier * IDR
     upper_bound = Q90 + multiplier * IDR
-
-    # 3. 创建掩码
-    # (df[cols] < lower_bound) 或 (df[cols] > upper_bound)
     outlier_mask = (df[numerical_cols_for_detection] < lower_bound) | (df[numerical_cols_for_detection] > upper_bound)
-
-    # 4. 找出包含至少一个异常值的行
     rows_with_outliers = outlier_mask.any(axis=1)
-
-    # 5. 统计和报告
     outlier_count = rows_with_outliers.sum()
     print(f"检测完成：")
     print(f"  原始数据行数: {df.shape[0]}")
-    print(f"  检测到 {outlier_count} 行含有异常值。")
-
-    # --- 第 4 步：删除异常行 ---
     df_cleaned = df[~rows_with_outliers]
     print(f"  已删除 {outlier_count} 行。")
     print(f"  剩余行数: {df_cleaned.shape[0]}")
@@ -95,3 +84,4 @@ try:
     print(f"总共保存了 {df_cleaned.shape[0]} 行数据。")
 except Exception as e:
     print(f"保存文件时发生错误: {e}")
+
