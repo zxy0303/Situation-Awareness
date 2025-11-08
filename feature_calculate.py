@@ -1,22 +1,12 @@
-# ==========================================================
-# 脚本 1: run_feature_engineering.py
-# (此脚本只运行一次，用于生成特征文件)
-# ==========================================================
-
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import sys
 
-
-# (确保您已安装: pip install pyarrow)
-
 def step1_load_and_feature_engineer(filepath, trip_split_minutes=10, window_seconds=60, step_seconds=10):
     """
-    步骤 1 & 2:
     1. 加载数据并按 'collectTime' 排序。
     2. 从第14列开始，对所有数值传感器进行滑动窗口统计。
-    (此函数基于 test2.py)
     """
     print("--- 步骤 1: 开始加载数据... ---")
     try:
@@ -28,8 +18,6 @@ def step1_load_and_feature_engineer(filepath, trip_split_minutes=10, window_seco
     print("正在转换时间戳并按 'collectTime' 排序...")
     df['collectTime'] = pd.to_datetime(df['collectTime'], unit='ms')
     df = df.sort_values('collectTime').reset_index(drop=True)
-
-    # (来自 test2.py)
     sensor_cols = df.iloc[:, 13:].select_dtypes(include='number').columns
     print(f"已识别出 {len(sensor_cols)} 个数值型传感器特征（从第14列开始）。")
 
@@ -62,7 +50,6 @@ def step1_load_and_feature_engineer(filepath, trip_split_minutes=10, window_seco
                                   (trip_data['collectTime'] < window_end)]
 
             if len(window_df) > 5:
-                # (来自 test2.py)
                 stats = window_df[sensor_cols].agg(['mean', 'std', 'max', 'min'])
                 flat_stats = stats.unstack()
                 flat_stats.index = [f"{col}_{stat}" for col, stat in flat_stats.index]
@@ -81,20 +68,14 @@ def step1_load_and_feature_engineer(filepath, trip_split_minutes=10, window_seco
     print(f"\n特征工程完成，共从所有行程中提取出 {len(window_features_list)} 个有效的时间窗口。")
     features_df = pd.DataFrame(window_features_list)
     features_df = features_df.replace([np.inf, -np.inf], np.nan)
-
-    # (来自 test2.py，使用 .fillna(0) 修正)
     features_df = features_df.fillna(0)
     print("已使用 fillna(0) 填充计算失败(NaN)的特征。")
 
     return features_df
 
-
-# --- 主程序执行 (脚本 1) ---
 if __name__ == '__main__':
 
     INPUT_FILEPATH = '2025-08-23_processed_Q10-Q90.csv'
-
-    # --- 【修改】输出文件使用 Parquet 格式 ---
     OUTPUT_FEATURES_FILE = 'driving_features.parquet'
 
     print(f"--- 开始特征工程 ---")
@@ -110,7 +91,6 @@ if __name__ == '__main__':
     if features_df is not None:
         try:
             print(f"\n正在保存 {len(features_df)} 个特征窗口到 {OUTPUT_FEATURES_FILE}...")
-            # --- 【修改】使用 to_parquet ---
             features_df.to_parquet(OUTPUT_FEATURES_FILE, index=False, engine='pyarrow')
             print("--- 特征工程文件保存完毕 ---")
         except ImportError:
@@ -123,4 +103,5 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"保存文件时出错: {e}")
     else:
+
         print("未能从数据中提取任何特征，程序终止。")
