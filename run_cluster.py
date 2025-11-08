@@ -1,6 +1,5 @@
 # ==========================================================
-# 脚本 3 (最终版 - 已修复 NameError): run_global_search_with_manual_decision.py
-# (此脚本允许您在自动搜索后，手动选择最佳的 {算法, N, K} 组合)
+# 此脚本允许在自动搜索后，手动选择最佳的 {算法, N, K} 组合
 # ==========================================================
 
 import pandas as pd
@@ -18,26 +17,14 @@ from sklearn.metrics import silhouette_score
 import sys
 import time
 import os
-
-# (确保您已安装: pip install pyarrow scikit-learn seaborn)
-
-# --- 全局设置：确保绘图能正确显示中文和负号 ---
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['axes.unicode_minus'] = False
 pd.set_option('display.max_columns', 50)
 pd.set_option('display.width', 200)
 
-
-# --- 步骤 1: N-K-算法 联合搜索 (基于 test2.py 和 test3.py) ---
-# --- 【已修复】添加 'detail_plot_dir' 参数 ---
 def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
-    """
-    (函数顶部的文档字符串保持不变)
-    ...
-    """
-    print("\n--- 步骤 1: 开始联合搜索最佳算法, N (PCA) 和 K (KMeans/GMM)... ---")
 
-    # --- 1. 标准化 (只做一次) ---
+    print("\n--- 步骤 1: 开始联合搜索最佳算法, N (PCA) 和 K (KMeans/GMM)... ---")
     feature_cols = [col for col in features_df.columns if col != 'window_start_time']
     X = features_df[feature_cols].values
 
@@ -48,17 +35,12 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # --- 2. 完整 PCA 分析 (只做一次) ---
+    # --- 完整 PCA 分析 ---
     print("正在拟合完整PCA以分析方差...")
     pca_full = PCA(n_components=None, random_state=42)
     pca_full.fit(X_scaled)
-
-    # (绘图逻辑来自 test2.py)
     plt.figure(figsize=(10, 6))
-
-    # --- 【关键】: 我们在这里获取方差数组 ---
     explained_variance = np.cumsum(pca_full.explained_variance_ratio_)
-    # --- 【结束】 ---
 
     plt.plot(range(1, len(explained_variance) + 1), explained_variance, marker='o', linestyle='--')
     plt.xlabel('主成分数量')
@@ -70,7 +52,6 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
 
     X_pca_full = pca_full.transform(X_scaled)
 
-    # (抽样逻辑来自 test3.py)
     if len(X_pca_full) > 10000:
         print(f"数据量 ({len(X_pca_full)}) > 10000, 剪影系数将使用 10000 样本进行估算。")
         rng = np.random.RandomState(42)
@@ -84,7 +65,7 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
     os.makedirs(detail_plot_dir, exist_ok=True)
     print(f"K vs Score 的详细图表将保存在: ./{detail_plot_dir}/")
 
-    # --- 3. 嵌套循环搜索 ---
+    # --- 嵌套循环搜索 ---
     kmeans_search_results = []  # 存储 (n, best_k_for_n, best_score_for_n)
     gmm_search_results = []
 
@@ -132,11 +113,10 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
             except Exception as e_g:
                 pass
             k_scores_gmm.append(score_g)
-            # ( ... K-loop 结束 ... )
         kmeans_search_results.append((n, best_k_k, best_score_k_for_this_n))
         gmm_search_results.append((n, best_k_g, best_score_g_for_this_n))
 
-        # --- 4. 【新】为这个N绘制并保存 K vs Score 详细图 ---
+        # ---为这个N绘制并保存 K vs Score 详细图 ---
         plt.figure(figsize=(10, 6))
         plt.plot(k_range, k_scores_kmeans, marker='o', label='KMeans')
         plt.plot(k_range, k_scores_gmm, marker='s', label='GMM')
@@ -150,26 +130,21 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
 
     print("--- 搜索完成 ---")
 
-    # --- 5. 分析并推荐结果 ---
+    # --- 分析并推荐结果 ---
     kmeans_best = max(kmeans_search_results, key=lambda item: item[2])
     gmm_best = max(gmm_search_results, key=lambda item: item[2])
 
-    # --- 【修改】 ---
-    # (因为 N 是从 1 开始的，所以 N=5 对应索引 4)
     kmeans_best_n = kmeans_best[0]
     kmeans_variance = explained_variance[kmeans_best_n - 1]
     print(f"\n--- 最佳 KMeans 结果 (自动推荐) ---")
     print(f"  -> N={kmeans_best_n}, K={kmeans_best[1]}, 剪影系数={kmeans_best[2]:.4f}")
     print(f"  -> N={kmeans_best_n} 时, 保留了 {kmeans_variance:.2%} 的原始方差 (信息)。")
-    # --- 【修改结束】 ---
-
-    # --- 【修改】 ---
     gmm_best_n = gmm_best[0]
     gmm_variance = explained_variance[gmm_best_n - 1]
     print(f"\n--- 最佳 GMM 结果 (自动推荐) ---")
     print(f"  -> N={gmm_best_n}, K={gmm_best[1]}, 剪影系数={gmm_best[2]:.4f}")
     print(f"  -> N={gmm_best_n} 时, 保留了 {gmm_variance:.2%} 的原始方差 (信息)。")
-    # --- 【修改结束】 ---
+
 
     if kmeans_best[2] > gmm_best[2]:
         recommended_algo = 'kmeans'
@@ -182,7 +157,6 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
         recommended_k = gmm_best[1]
         recommended_score = gmm_best[2]
 
-    # --- 【修改】 ---
     global_variance = explained_variance[recommended_n - 1]
     print(f"\n--- 全局冠军 (自动推荐) ---")
     print(f"  -> 算法: {recommended_algo.upper()}")
@@ -190,9 +164,8 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
     print(f"  -> 最佳聚类数 (K): {recommended_k}")
     print(f"  -> 最高剪影系数: {recommended_score:.4f}")
     print(f"  -> {recommended_n} 维保留了 {global_variance:.2%} 的原始方差 (信息)。")
-    # --- 【修改结束】 ---
 
-    # --- 绘制 N vs Score 总览图 (来自 test2.py) ---
+    # --- 绘制 N vs Score 总览图  ---
     results_df_k = pd.DataFrame(kmeans_search_results, columns=['N_Components', 'Best_K', 'Silhouette_Score'])
     results_df_g = pd.DataFrame(gmm_search_results, columns=['N_Components', 'Best_K_GMM', 'Silhouette_Score_GMM'])
 
@@ -208,12 +181,10 @@ def step1_global_search(features_df, n_range, k_range, detail_plot_dir):
     plt.grid(True)
     plt.savefig('global_search_n_vs_score_SUMMARY.png', dpi=300)
     print("全局搜索总览图已保存为: global_search_n_vs_score_SUMMARY.png")
-
-    # --- 6. 返回推荐值和 *完整* 的 X_scaled / pca_full ---
     return X_scaled, pca_full, recommended_algo, recommended_n, recommended_k
 
 
-# --- 步骤 2: 【新】应用用户选择的PCA ---
+# --- 应用用户选择的PCA ---
 def step2_apply_final_pca(X_scaled, pca_full, final_n):
     """
     一个简单的新函数，用于从完整的PCA结果中
@@ -226,13 +197,9 @@ def step2_apply_final_pca(X_scaled, pca_full, final_n):
     return X_pca_final
 
 
-# --- 步骤 3: 聚类与可视化 (来自 test3.py) ---
+# ---聚类与可视化 --
 def step3_cluster_and_visualize(X_pca, algo_name, optimal_k):
-    """
-    (原 test3.py 中的 step4_cluster_and_visualize)
-    1. 使用“冠军”算法和K值执行最终聚类。
-    2. 使用 PC1 和 PC2 绘制聚类结果散点图。
-    """
+
     print(f"\n--- 步骤 3: 正在使用 {algo_name.upper()} (K={optimal_k}) 执行最终聚类... ---")
 
     if algo_name == 'kmeans':
@@ -243,10 +210,7 @@ def step3_cluster_and_visualize(X_pca, algo_name, optimal_k):
     start_time = time.time()
     cluster_labels = model.fit_predict(X_pca)
     print(f"最终聚类耗时: {time.time() - start_time:.2f} 秒")
-
     print("正在生成可视化图表...")
-
-    # (绘图逻辑来自 test3.py)
     plot_df = pd.DataFrame({
         'PC1': X_pca[:, 0],
         'PC2': X_pca[:, 1],
@@ -275,10 +239,9 @@ def step3_cluster_and_visualize(X_pca, algo_name, optimal_k):
     return cluster_labels
 
 
-# --- 步骤 4: 反向映射与保存 (来自 test3.py) ---
+# --- 反向映射与保存---
 def step4_save_results(features_df, cluster_labels, output_filename):
     """
-    (原 test3.py 中的 step5_save_results)
     1. 将聚类标签 (category_id) 添加回 "未做PCA" 的特征数据上。
     2. 保存到新的 CSV 文件。
     """
@@ -303,19 +266,16 @@ def step4_save_results(features_df, cluster_labels, output_filename):
         print(f"保存文件时发生错误: {e}")
 
 
-# --- 主程序执行 (脚本 3) ---
+
 if __name__ == '__main__':
 
     FEATURES_FILEPATH = 'driving_features.parquet'
     FINAL_OUTPUT_FILEPATH = 'clustered_driving_segments_MANUAL_CHOICE.csv'
 
-    # (基于您 {N=11, K=14} 的发现，我们扩大 K 的搜索范围)
-    N_COMPONENTS_RANGE = range(2, 16)  # 搜索 8 到 15 维
-    K_RANGE = range(2, 18)  # 搜索 2 到 17 簇
+    N_COMPONENTS_RANGE = range(2, 16) 
+    K_RANGE = range(2, 18)
 
-    # --- 【已修复】在 main 作用域中定义目录名 ---
     DETAIL_PLOT_DIR = "k_vs_score_plots"
-    # --- 【修复结束】 ---
 
     # --- 1. 加载特征文件 ---
     try:
@@ -334,7 +294,6 @@ if __name__ == '__main__':
     if features_df is not None:
 
         # --- 2. 步骤 1: 运行全局搜索 ---
-        # --- 【已修复】将 'DETAIL_PLOT_DIR' 传递给函数 ---
         X_scaled, pca_full, rec_algo, rec_n, rec_k = step1_global_search(
             features_df,
             n_range=N_COMPONENTS_RANGE,
@@ -342,19 +301,17 @@ if __name__ == '__main__':
             detail_plot_dir=DETAIL_PLOT_DIR
         )
 
-        # --- 3. 【新】用户决策步骤 ---
+        # --- 3. 用户决策步骤 ---
         print("\n" + "=" * 50)
         print("--- 请您进行最终决策 ---")
         print("脚本已完成自动搜索，并提供了“自动推荐”。")
         print(f"请查看 'global_search_n_vs_score_SUMMARY.png' (总览图)")
-        # --- 【已修复】使用在 main 作用域中定义的变量 ---
         print(f"以及 './{DETAIL_PLOT_DIR}/' 文件夹中的详细图表 (例如 'k_vs_score_for_N_{rec_n}.png')。")
         print("\n--- 简约原则提醒 ---")
         print(f"自动推荐的 K={rec_k}。如果 K={rec_k - 1} 或 K={rec_k - 2} 的分数几乎一样高，")
         print("您可能应该选择那个 K 值更小的模型，因为它更容易解释。")
         print("=" * 50 + "\n")
 
-        # 接收用户输入 (如果用户直接按回车，则使用推荐值)
         final_algo = input(f"请输入您最终选择的算法 (kmeans/gmm) [默认为: {rec_algo}]: ").strip().lower() or rec_algo
 
         try:
@@ -373,15 +330,16 @@ if __name__ == '__main__':
 
         print(f"\n--- 您的最终选择: 算法={final_algo}, N={final_n}, K={final_k} ---")
 
-        # --- 4. 步骤 2: 应用用户选择的 N ---
+        # --- 4.应用用户选择的 N ---
         # (从完整的 X_scaled 和 pca_full 中切片出用户要的 N 维数据)
         X_pca_final = pca_full.transform(X_scaled)[:, :final_n]
 
-        # --- 5. 步骤 3: 聚类与可视化 ---
+        # --- 5.聚类与可视化 ---
         cluster_labels = step3_cluster_and_visualize(X_pca_final, final_algo, final_k)
 
-        # --- 6. 步骤 4: 反向映射与保存 ---
+        # --- 6.反向映射与保存 ---
         step4_save_results(features_df, cluster_labels, FINAL_OUTPUT_FILEPATH)
 
     else:
+
         print("特征文件加载失败，程序终止。")
