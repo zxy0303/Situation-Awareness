@@ -11,8 +11,6 @@ JSON_FILE = 'selected_features_structured.json'
 DATA_FILE = '2025-08-23_processed_Q10-Q90.csv'
 OUTPUT_DIR = 'correlation_heatmaps'
 
-# 确保 Matplotlib 可以显示中文
-# (请确保您的环境中已安装支持中文的字体，例如 SimHei)
 plt.rcParams['font.sans-serif'] = ['SimHei']
 plt.rcParams['axes.unicode_minus'] = False
 
@@ -35,13 +33,10 @@ try:
             features = sub_cat.get('features', [])
 
             if sub_name and features:
-                # 使用 set 来自动处理并合并重复的特征
                 if sub_name not in subdimension_features:
                     subdimension_features[sub_name] = set()
 
                 subdimension_features[sub_name].update(features)
-
-    # 将 set 转换回 list
     for sub_name in subdimension_features:
         subdimension_features[sub_name] = list(subdimension_features[sub_name])
 
@@ -91,10 +86,8 @@ for sub_name, feature_list in subdimension_features.items():
     # 5.3 创建子 DataFrame 并计算相关性
     sub_df = df[available_features]
 
-    # (确保所有数据都是数值类型，以防万一)
     sub_df = sub_df.apply(pd.to_numeric, errors='coerce')
 
-    # (删除全是NaN的列，以防 'coerce' 产生了问题)
     sub_df = sub_df.dropna(axis=1, how='all')
 
     if len(sub_df.columns) < 2:
@@ -103,7 +96,7 @@ for sub_name, feature_list in subdimension_features.items():
 
     corr_matrix = sub_df.corr()
 
-    # 5.4 打印相关性强度 (满足用户需求)
+    # 5.4 打印相关性强度
     print(f"  '{sub_name}' 的相关性矩阵:")
     # 使用 .to_string() 以便在日志中完整显示
     print(corr_matrix.to_string(float_format="%.2f"))
@@ -114,7 +107,7 @@ for sub_name, feature_list in subdimension_features.items():
         plot_size = max(6, len(corr_matrix) * 0.7)
         plt.figure(figsize=(plot_size + 2, plot_size))
 
-        # 创建一个遮罩，隐藏相关性矩阵的上三角（因为它是对称的）
+
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
 
         heatmap = sns.heatmap(
@@ -133,19 +126,18 @@ for sub_name, feature_list in subdimension_features.items():
         plt.xticks(rotation=45, ha='right', fontsize=10)
         plt.yticks(rotation=0, fontsize=10)
         plt.tight_layout()  # 自动调整布局防止标签重叠
-
-        # 5.6 清理文件名并保存
         safe_filename = "".join(c for c in sub_name if c.isalnum() or c in ('&', '_', '-')).rstrip()
         if not safe_filename:
             safe_filename = f"subdim_{np.random.randint(1000)}"  # 备用文件名
 
         output_path = os.path.join(OUTPUT_DIR, f"corr_heatmap_{safe_filename}.png")
         plt.savefig(output_path)
-        plt.close()  # 关闭图形，释放内存
+        plt.close() 
 
         print(f"  已保存热图到: {output_path}")
 
     except Exception as e:
         print(f"  !! 在为 '{sub_name}' 绘制热图时失败: {e}")
+
 
 print("\n--- 所有子维度处理完毕 ---")
