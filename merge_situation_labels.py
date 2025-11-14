@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import sys
 
-# --- 1. 定义文件路径 (请根据需要修改) ---
 
 # 源数据文件 (来自 data_processing.py 的输出)
 SOURCE_DATA_FILE = '2025-08-23_processed_Q10-Q90.csv'
@@ -17,15 +16,7 @@ JSON_LABELS_FILE = 'cluster_labels_output.json'
 OUTPUT_FILE = 'labeled_source_data_with_situations.csv'
 
 
-# --- 2. 【已修复】解析 JSON 态势文件 ---
 def load_and_parse_json_labels(json_path):
-    """
-    加载 JSON 文件 (长格式)，并将其转换为宽格式的 DataFrame。
-
-    【修复】:
-    使用 pivot_table 和 aggfunc='first' 来代替 pivot，
-    以处理 (Cluster_ID, Subdimension) 组合在 JSON 中重复出现的问题。
-    """
     print(f"正在加载JSON态势文件: {json_path}")
 
     try:
@@ -39,8 +30,6 @@ def load_and_parse_json_labels(json_path):
     except Exception as e:
         print(f"读取JSON时发生未知错误: {e}")
         sys.exit(1)
-
-    # 检查必需的列
     required_cols = ['Cluster_ID', 'Dimension', 'Subdimension', 'Assigned_Label']
     if not all(col in df_long.columns for col in required_cols):
         print(f"错误: JSON 文件缺少必需的列。")
@@ -50,28 +39,18 @@ def load_and_parse_json_labels(json_path):
 
     print("JSON 加载成功，正在进行数据透视 (pivot)...")
 
-    # 1. 创建组合列名 (例如 "Environment_weather&thermal")
     df_long['situation_col_name'] = df_long['Dimension'] + '_' + df_long['Subdimension']
-
-    # 2. 数据透视：将长格式转为宽格式
     try:
-        # --- 【修复】---
-        # 使用 pivot_table 代替 pivot，并添加 aggfunc='first'
-        # 这将自动处理重复条目，只保留第一个出现的标签
         labels_df = df_long.pivot_table(
             index='Cluster_ID',
             columns='situation_col_name',
             values='Assigned_Label',
-            aggfunc='first'  # <-- 关键修复：处理重复项
+            aggfunc='first' 
         )
-        # --- 【修复结束】---
 
     except Exception as e:
-        # (保留此处的 try/except 以防万一，尽管 pivot_table 应该已解决问题)
         print(f"错误：在数据透视时出错: {e}")
         sys.exit(1)
-
-    # 3. 获取所有态势列的列表
     situation_columns_found = labels_df.columns.tolist()
 
     print(f"成功解析 {len(labels_df)} 个聚类的态势。")
@@ -79,17 +58,12 @@ def load_and_parse_json_labels(json_path):
 
     example_cols = situation_columns_found[:4]
     print(f"  -> 示例列名: {example_cols}")
-
-    # 重置索引，使 Cluster_ID 成为一个列（如果需要的话），但 merge 时用索引更好
     # labels_df = labels_df.reset_index()
-
     return labels_df, situation_columns_found
 
 
-# --- 3. 主执行函数 (无需修改) ---
 def main():
     # --- 步骤 1: 加载并处理JSON态势标签 ---
-    # (此函数已被修复)
     labels_df, situation_columns = load_and_parse_json_labels(JSON_LABELS_FILE)
 
     # --- 步骤 2: 加载聚类分段文件 (category_id <-> window_start_time) ---
@@ -135,7 +109,7 @@ def main():
     original_df = original_df.sort_values('collectTime_dt')
     print(f"源数据加载成功，总计 {len(original_df)} 行。")
 
-    # --- 步骤 5: 将分段态势标注回源文件 (核心步骤) ---
+    # --- 步骤 5: 将分段态势标注回源文件---
     print("正在将态势标注合并回源文件 (使用 merge_asof)...")
 
     columns_to_merge = ['window_start_time'] + situation_columns
@@ -162,4 +136,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
