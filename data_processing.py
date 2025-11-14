@@ -17,6 +17,23 @@ except Exception as e:
     print(f"在加载或排序时发生错误: {e}")
     raise e
 df = df[df['cycleType'] != 10000]
+print("开始检查空缺值 > 50% 的列...")
+nan_threshold = 0.5
+nan_ratio = df.isnull().mean()
+cols_to_drop = nan_ratio[nan_ratio > nan_threshold].index
+
+if len(cols_to_drop) > 0:
+    print(f"检测到 {len(cols_to_drop)} 列的空缺值 > {nan_threshold * 100}%，将予以忽略：")
+    # 打印所有被删除的列
+    for col in cols_to_drop:
+        print(f"  - {col} (缺失比例: {nan_ratio[col]:.2%})")
+
+    # 执行删除
+    df = df.drop(columns=cols_to_drop)
+    print(f"清理后数据形状: {df.shape}")
+else:
+    print(f"所有列的空缺值均未超过 {nan_threshold * 100}% 阈值。")
+print("---------------------------------")
 # --- 第 2 步：按 N-Unique=10 阈值分类列 ---
 all_float_cols = df.select_dtypes(include=[np.number]).columns
 nunique_threshold = 10
@@ -84,4 +101,5 @@ try:
     print(f"总共保存了 {df_cleaned.shape[0]} 行数据。")
 except Exception as e:
     print(f"保存文件时发生错误: {e}")
+
 
