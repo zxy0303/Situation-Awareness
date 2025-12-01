@@ -17,14 +17,10 @@ JSON_LABELS_FILE = 'cluster_labels_output_G.json'
 OUTPUT_FILE = 'labeled_source_data_with_situations.csv'
 
 WINDOW_SIZE_SECONDS = 60
-# --- 2. 【已修复】解析 JSON 态势文件 ---
+# --- 2. 解析 JSON 态势文件 ---
 def load_and_parse_json_labels(json_path):
     """
     加载 JSON 文件 (长格式)，并将其转换为宽格式的 DataFrame。
-
-    【修复】:
-    使用 pivot_table 和 aggfunc='first' 来代替 pivot，
-    以处理 (Cluster_ID, Subdimension) 组合在 JSON 中重复出现的问题。
     """
     print(f"正在加载JSON态势文件: {json_path}")
 
@@ -55,19 +51,14 @@ def load_and_parse_json_labels(json_path):
 
     # 2. 数据透视：将长格式转为宽格式
     try:
-        # --- 【修复】---
-        # 使用 pivot_table 代替 pivot，并添加 aggfunc='first'
-        # 这将自动处理重复条目，只保留第一个出现的标签
         labels_df = df_long.pivot_table(
             index='Cluster_ID',
             columns='situation_col_name',
             values='Assigned_Label',
             aggfunc='first'  # <-- 关键修复：处理重复项
         )
-        # --- 【修复结束】---
 
     except Exception as e:
-        # (保留此处的 try/except 以防万一，尽管 pivot_table 应该已解决问题)
         print(f"错误：在数据透视时出错: {e}")
         sys.exit(1)
 
@@ -86,10 +77,9 @@ def load_and_parse_json_labels(json_path):
     return labels_df, situation_columns_found
 
 
-# --- 3. 主执行函数 (无需修改) ---
+# --- 3. 主执行函数---
 def main():
     # --- 步骤 1: 加载并处理JSON态势标签 ---
-    # (此函数已被修复)
     labels_df, situation_columns = load_and_parse_json_labels(JSON_LABELS_FILE)
 
     # --- 步骤 2: 加载聚类分段文件 (category_id <-> window_start_time) ---
@@ -137,7 +127,7 @@ def main():
     original_df = original_df.sort_values('collectTime_dt')
     print(f"源数据加载成功，总计 {len(original_df)} 行。")
 
-    # --- 步骤 5: 将分段态势标注回源文件 (核心步骤) ---
+    # --- 步骤 5: 将分段态势标注回源文件 ---
     print("正在将态势标注合并回源文件 (使用 merge_asof)...")
 
     columns_to_merge = ['window_end_time'] + situation_columns
@@ -164,4 +154,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
