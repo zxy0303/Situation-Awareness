@@ -12,6 +12,15 @@
 为经过特征工程计算的数据打上聚类标签
 ## 4.llmbased_labled.py
 计算所有类别的平均特征，以便LLM分析
+##5.cluster_to_json.py
+将上一步中得到的csv文件转化为每一个类别以及特征数据的json文件，便于写入prompt进行LLM标注
+##6.使用设计好的prompt，输入LLM对数据进行标注
+##7.merge_situation_labels.py
+将LLM标注的标签标回源数据
+##8.im_nan.py、sa_fea.py
+进行特征重要性分析以及态势与特征的交互分析
+##9.ploty_html.py
+绘制态势及特征曲线图
 
 
 
