@@ -13,7 +13,6 @@ def run_importance_analysis():
     print("\n--- 开始运行：特征重要性深度分析 (修复版) ---")
 
     # 1. 加载数据
-    # 请确保文件路径正确
     csv_path = 'labeled_source_data_with_situations.csv'
     json_path = 'selected_features_structured.json'
 
@@ -56,13 +55,9 @@ def run_importance_analysis():
             print("  跳过：态势数据无变化 (常量)")
             return
 
-        # --- 修复点 1: 数据清洗与空列处理 ---
         # 先转换为数值型
         for col in X.columns:
             X[col] = pd.to_numeric(X[col], errors='coerce')
-
-        # 【关键修复】：在 Imputer 之前，先删除全为 NaN 的列
-        # 这样 X.columns 就和 Imputer 处理后的列数一致了
         X.dropna(axis=1, how='all', inplace=True)
 
         if X.shape[1] == 0:
@@ -134,5 +129,6 @@ if __name__ == "__main__":
     # 解决中文显示
     plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
+
 
     run_importance_analysis()
